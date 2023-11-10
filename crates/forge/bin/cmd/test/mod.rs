@@ -236,6 +236,8 @@ impl TestArgs {
             .run_tests(runner, config.clone(), verbosity, filter.clone(), test_options.clone())
             .await?;
 
+        let mut etherscan_sources: ContractSources = Default::default();
+
         if should_debug {
             let tests = outcome.clone().into_tests();
             let mut decoders = Vec::new();
@@ -267,6 +269,8 @@ impl TestArgs {
                         decoder.identify(trace, &mut local_identifier);
                         decoder.identify(trace, &mut etherscan_identifier);
 
+                        etherscan_sources = etherscan_identifier.get_compiled_contracts().await?;
+
                         let should_include = match kind {
                             // At verbosity level 3, we only display traces for failed tests
                             // At verbosity level 4, we also display the setup trace for failed
@@ -294,7 +298,7 @@ impl TestArgs {
                 decoders.push(decoder);
             }
 
-            let mut sources: ContractSources = Default::default();
+            let mut sources: ContractSources = etherscan_sources.clone();
             for (id, artifact) in output.into_artifacts() {
                 // Sources are only required for the debugger, but it *might* mean that there's
                 // something wrong with the build and/or artifacts.
