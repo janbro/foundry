@@ -138,8 +138,6 @@ contract Contract {
     let call = contract.method::<_, ()>("deploy", ()).unwrap();
 
     let receipt = call.send().await.unwrap().await.unwrap().unwrap();
-    dbg!(&receipt);
-
     let res = api.ots_get_internal_operations(receipt.transaction_hash).await.unwrap();
 
     assert_eq!(res.len(), 1);
@@ -232,9 +230,12 @@ async fn can_call_ots_has_code() {
         .await
         .unwrap());
 
-    client.send_transaction(deploy_tx, None).await.unwrap();
+    let pending = client.send_transaction(deploy_tx, None).await.unwrap();
+    let receipt = pending.await.unwrap().unwrap();
 
     let num = client.get_block_number().await.unwrap();
+    assert_eq!(num, receipt.block_number.unwrap());
+
     // code is detected after deploying
     assert!(api.ots_has_code(pending_contract_address, BlockNumber::Number(num)).await.unwrap());
 

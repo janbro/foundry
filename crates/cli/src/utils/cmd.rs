@@ -1,6 +1,5 @@
 use alloy_json_abi::JsonAbi as Abi;
 use alloy_primitives::Address;
-use ethers::core::types::Chain;
 use eyre::{Result, WrapErr};
 use foundry_common::{cli_warn, fs, TestFunctionExt};
 use foundry_compilers::{
@@ -10,7 +9,7 @@ use foundry_compilers::{
     utils::read_json_file,
     Artifact, ProjectCompileOutput,
 };
-use foundry_config::{error::ExtractConfigError, figment::Figment, Chain as ConfigChain, Config};
+use foundry_config::{error::ExtractConfigError, figment::Figment, Chain, Config, NamedChain};
 use foundry_debugger::DebuggerArgs;
 use foundry_evm::{
     debug::DebugArena,
@@ -164,28 +163,28 @@ macro_rules! update_progress {
 }
 
 /// True if the network calculates gas costs differently.
-pub fn has_different_gas_calc(chain: u64) -> bool {
-    if let ConfigChain::Named(chain) = ConfigChain::from(chain) {
+pub fn has_different_gas_calc(chain_id: u64) -> bool {
+    if let Some(chain) = Chain::from(chain_id).named() {
         return matches!(
             chain,
-            Chain::Arbitrum |
-                Chain::ArbitrumTestnet |
-                Chain::ArbitrumGoerli |
-                Chain::ArbitrumSepolia
+            NamedChain::Arbitrum |
+                NamedChain::ArbitrumTestnet |
+                NamedChain::ArbitrumGoerli |
+                NamedChain::ArbitrumSepolia
         )
     }
     false
 }
 
 /// True if it supports broadcasting in batches.
-pub fn has_batch_support(chain: u64) -> bool {
-    if let ConfigChain::Named(chain) = ConfigChain::from(chain) {
+pub fn has_batch_support(chain_id: u64) -> bool {
+    if let Some(chain) = Chain::from(chain_id).named() {
         return !matches!(
             chain,
-            Chain::Arbitrum |
-                Chain::ArbitrumTestnet |
-                Chain::ArbitrumGoerli |
-                Chain::ArbitrumSepolia
+            NamedChain::Arbitrum |
+                NamedChain::ArbitrumTestnet |
+                NamedChain::ArbitrumGoerli |
+                NamedChain::ArbitrumSepolia
         )
     }
     true
@@ -369,7 +368,7 @@ impl TryFrom<EvmError> for TraceResult {
 pub async fn handle_traces(
     mut result: TraceResult,
     config: &Config,
-    chain: Option<ethers::types::Chain>,
+    chain: Option<Chain>,
     labels: Vec<String>,
     verbose: bool,
     debug: bool,

@@ -1,6 +1,6 @@
+use alloy_json_abi::JsonAbi;
 use clap::Parser;
 use comfy_table::{presets::ASCII_MARKDOWN, Table};
-use ethers::abi::RawAbi;
 use eyre::Result;
 use foundry_cli::opts::{CompilerArgs, CoreBuildArgs};
 use foundry_common::compile;
@@ -10,14 +10,13 @@ use foundry_compilers::{
             BytecodeOutputSelection, ContractOutputSelection, DeployedBytecodeOutputSelection,
             EvmOutputSelection, EwasmOutputSelection,
         },
-        LosslessAbi, StorageLayout,
+        StorageLayout,
     },
     info::ContractInfo,
     utils::canonicalize,
 };
 use serde_json::{to_value, Value};
 use std::fmt;
-use tracing::trace;
 
 /// CLI arguments for `forge inspect`.
 #[derive(Debug, Clone, Parser)]
@@ -90,7 +89,7 @@ impl InspectArgs {
                     .abi
                     .as_ref()
                     .ok_or_else(|| eyre::eyre!("Failed to fetch lossless ABI"))?;
-                print_abi(abi, pretty)?;
+                print_abi(&abi.abi, pretty)?;
             }
             ContractArtifactField::Bytecode => {
                 let tval: Value = to_value(&artifact.bytecode)?;
@@ -128,7 +127,7 @@ impl InspectArgs {
                 println!("{}", serde_json::to_string_pretty(&to_value(&artifact.gas_estimates)?)?);
             }
             ContractArtifactField::StorageLayout => {
-                print_storage_layout(&artifact.storage_layout, pretty)?;
+                print_storage_layout(artifact.storage_layout.as_ref(), pretty)?;
             }
             ContractArtifactField::DevDoc => {
                 println!("{}", serde_json::to_string_pretty(&to_value(&artifact.devdoc)?)?);
@@ -165,7 +164,8 @@ impl InspectArgs {
             }
             ContractArtifactField::Errors => {
                 let mut out = serde_json::Map::new();
-                if let Some(LosslessAbi { abi, .. }) = &artifact.abi {
+                if let Some(abi) = &artifact.abi {
+                    let abi = &abi.abi;
                     // Print the signature of all errors
                     for er in abi.errors.iter().flat_map(|(_, errors)| errors) {
                         let types = er.inputs.iter().map(|p| p.ty.clone()).collect::<Vec<_>>();
@@ -181,7 +181,8 @@ impl InspectArgs {
             }
             ContractArtifactField::Events => {
                 let mut out = serde_json::Map::new();
-                if let Some(LosslessAbi { abi, .. }) = &artifact.abi {
+                if let Some(abi) = &artifact.abi {
+                    let abi = &abi.abi;
                     // print the signature of all events including anonymous
                     for ev in abi.events.iter().flat_map(|(_, events)| events) {
                         let types = ev.inputs.iter().map(|p| p.ty.clone()).collect::<Vec<_>>();
@@ -199,26 +200,20 @@ impl InspectArgs {
     }
 }
 
-pub fn print_abi(abi: &LosslessAbi, pretty: bool) -> Result<()> {
-    let abi_json = to_value(abi)?;
-    if !pretty {
-        println!("{}", serde_json::to_string_pretty(&abi_json)?);
-        return Ok(())
-    }
-
-    let abi_json: RawAbi = serde_json::from_value(abi_json)?;
-    let source = foundry_utils::abi::abi_to_solidity(&abi_json, "")?;
-    println!("{}", source);
-
+pub fn print_abi(abi: &JsonAbi, pretty: bool) -> Result<()> {
+    let s = if pretty {
+        foundry_utils::abi::abi_to_solidity(abi, "")?
+    } else {
+        serde_json::to_string_pretty(&abi)?
+    };
+    println!("{s}");
     Ok(())
 }
 
-pub fn print_storage_layout(storage_layout: &Option<StorageLayout>, pretty: bool) -> Result<()> {
-    if storage_layout.is_none() {
-        eyre::bail!("Could not get storage layout")
-    }
-
-    let storage_layout = storage_layout.as_ref().unwrap();
+pub fn print_storage_layout(storage_layout: Option<&StorageLayout>, pretty: bool) -> Result<()> {
+    let Some(storage_layout) = storage_layout else {
+        eyre::bail!("Could not get storage layout");
+    };
 
     if !pretty {
         println!("{}", serde_json::to_string_pretty(&to_value(storage_layout)?)?);
@@ -227,17 +222,17 @@ pub fn print_storage_layout(storage_layout: &Option<StorageLayout>, pretty: bool
 
     let mut table = Table::new();
     table.load_preset(ASCII_MARKDOWN);
-    table.set_header(vec!["Name", "Type", "Slot", "Offset", "Bytes", "Contract"]);
+    table.set_header(["Name", "Type", "Slot", "Offset", "Bytes", "Contract"]);
 
     for slot in &storage_layout.storage {
         let storage_type = storage_layout.types.get(&slot.storage_type);
-        table.add_row(vec![
-            slot.label.clone(),
-            storage_type.as_ref().map_or("?".to_string(), |t| t.label.clone()),
-            slot.slot.clone(),
-            slot.offset.to_string(),
-            storage_type.as_ref().map_or("?".to_string(), |t| t.number_of_bytes.clone()),
-            slot.contract.clone(),
+        table.add_row([
+            slot.label.as_str(),
+            storage_type.map_or("?", |t| &t.label),
+            &slot.slot,
+            &slot.offset.to_string(),
+            &storage_type.map_or("?", |t| &t.number_of_bytes),
+            &slot.contract,
         ]);
     }
 

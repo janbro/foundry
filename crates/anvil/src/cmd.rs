@@ -28,7 +28,6 @@ use std::{
     time::Duration,
 };
 use tokio::time::{Instant, Interval};
-use tracing::{error, trace};
 
 #[derive(Clone, Debug, Parser)]
 pub struct NodeArgs {
@@ -423,7 +422,7 @@ pub struct AnvilEvmArgs {
     /// default value: 330
     ///
     /// See --fork-url.
-    /// See also, https://github.com/alchemyplatform/alchemy-docs/blob/master/documentation/compute-units.md#rate-limits-cups
+    /// See also, https://docs.alchemy.com/reference/compute-units#what-are-cups-compute-units-per-second
     #[clap(
         long,
         requires = "fork_url",
@@ -438,7 +437,7 @@ pub struct AnvilEvmArgs {
     /// default value: false
     ///
     /// See --fork-url.
-    /// See also, https://github.com/alchemyplatform/alchemy-docs/blob/master/documentation/compute-units.md#rate-limits-cups
+    /// See also, https://docs.alchemy.com/reference/compute-units#what-are-cups-compute-units-per-second
     #[clap(
         long,
         requires = "fork_url",
@@ -667,9 +666,8 @@ impl FromStr for ForkUrl {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, net::Ipv4Addr};
-
     use super::*;
+    use std::{env, net::Ipv4Addr};
 
     #[test]
     fn test_parse_fork_url() {

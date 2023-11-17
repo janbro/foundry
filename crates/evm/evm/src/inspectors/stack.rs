@@ -3,13 +3,15 @@ use super::{
     TracePrinter, Tracer,
 };
 use alloy_primitives::{Address, Bytes, B256, U256};
-use ethers::{signers::LocalWallet, types::Log};
+use ethers_core::types::Log;
+use ethers_signers::LocalWallet;
 use foundry_evm_core::{backend::DatabaseExt, debug::DebugArena};
 use foundry_evm_coverage::HitMaps;
 use foundry_evm_traces::CallTraceArena;
 use revm::{
     interpreter::{
-        return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, Memory, Stack,
+        return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, SharedMemory,
+        Stack,
     },
     primitives::{BlockEnv, Env},
     EVMData, Inspector,
@@ -190,7 +192,7 @@ pub struct InspectorData {
     pub coverage: Option<HitMaps>,
     pub cheatcodes: Option<Cheatcodes>,
     pub script_wallets: Vec<LocalWallet>,
-    pub chisel_state: Option<(Stack, Memory, InstructionResult)>,
+    pub chisel_state: Option<(Stack, SharedMemory, InstructionResult)>,
 }
 
 /// An inspector that calls multiple inspectors in sequence.
@@ -353,11 +355,8 @@ impl InspectorStack {
 }
 
 impl<DB: DatabaseExt> Inspector<DB> for InspectorStack {
-    fn initialize_interp(
-        &mut self,
-        interpreter: &mut Interpreter,
-        data: &mut EVMData<'_, DB>,
-    ) -> InstructionResult {
+    fn initialize_interp(&mut self, interpreter: &mut Interpreter<'_>, data: &mut EVMData<'_, DB>) {
+        let res = interpreter.instruction_result;
         call_inspectors!(
             [
                 &mut self.debugger,
@@ -368,23 +367,19 @@ impl<DB: DatabaseExt> Inspector<DB> for InspectorStack {
                 &mut self.printer
             ],
             |inspector| {
-                let status = inspector.initialize_interp(interpreter, data);
+                inspector.initialize_interp(interpreter, data);
 
                 // Allow inspectors to exit early
-                if status != InstructionResult::Continue {
-                    return status
+                if interpreter.instruction_result != res {
+                    #[allow(clippy::needless_return)]
+                    return
                 }
             }
         );
-
-        InstructionResult::Continue
     }
 
-    fn step(
-        &mut self,
-        interpreter: &mut Interpreter,
-        data: &mut EVMData<'_, DB>,
-    ) -> InstructionResult {
+    fn step(&mut self, interpreter: &mut Interpreter<'_>, data: &mut EVMData<'_, DB>) {
+        let res = interpreter.instruction_result;
         call_inspectors!(
             [
                 &mut self.fuzzer,
@@ -396,16 +391,15 @@ impl<DB: DatabaseExt> Inspector<DB> for InspectorStack {
                 &mut self.printer
             ],
             |inspector| {
-                let status = inspector.step(interpreter, data);
+                inspector.step(interpreter, data);
 
                 // Allow inspectors to exit early
-                if status != InstructionResult::Continue {
-                    return status
+                if interpreter.instruction_result != res {
+                    #[allow(clippy::needless_return)]
+                    return
                 }
             }
         );
-
-        InstructionResult::Continue
     }
 
     fn log(
@@ -423,12 +417,8 @@ impl<DB: DatabaseExt> Inspector<DB> for InspectorStack {
         );
     }
 
-    fn step_end(
-        &mut self,
-        interpreter: &mut Interpreter,
-        data: &mut EVMData<'_, DB>,
-        status: InstructionResult,
-    ) -> InstructionResult {
+    fn step_end(&mut self, interpreter: &mut Interpreter<'_>, data: &mut EVMData<'_, DB>) {
+        let res = interpreter.instruction_result;
         call_inspectors!(
             [
                 &mut self.debugger,
@@ -439,16 +429,15 @@ impl<DB: DatabaseExt> Inspector<DB> for InspectorStack {
                 &mut self.chisel_state
             ],
             |inspector| {
-                let status = inspector.step_end(interpreter, data, status);
+                inspector.step_end(interpreter, data);
 
                 // Allow inspectors to exit early
-                if status != InstructionResult::Continue {
-                    return status
+                if interpreter.instruction_result != res {
+                    #[allow(clippy::needless_return)]
+                    return
                 }
             }
         );
-
-        InstructionResult::Continue
     }
 
     fn call(
@@ -470,6 +459,7 @@ impl<DB: DatabaseExt> Inspector<DB> for InspectorStack {
                 let (status, gas, retdata) = inspector.call(data, call);
 
                 // Allow inspectors to exit early
+                #[allow(clippy::needless_return)]
                 if status != InstructionResult::Continue {
                     return (status, gas, retdata)
                 }

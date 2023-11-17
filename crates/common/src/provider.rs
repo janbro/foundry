@@ -4,10 +4,11 @@ use crate::{
     runtime_client::{RuntimeClient, RuntimeClientBuilder},
     ALCHEMY_FREE_TIER_CUPS, REQUEST_TIMEOUT,
 };
-use ethers_core::types::{Chain, U256};
+use ethers_core::types::U256;
 use ethers_middleware::gas_oracle::{GasCategory, GasOracle, Polygon};
 use ethers_providers::{is_local_endpoint, Middleware, Provider, DEFAULT_LOCAL_POLL_INTERVAL};
 use eyre::{Result, WrapErr};
+use foundry_config::NamedChain;
 use reqwest::Url;
 use std::{
     path::{Path, PathBuf},
@@ -55,7 +56,7 @@ pub fn try_get_http_provider(builder: impl AsRef<str>) -> Result<RetryProvider> 
 pub struct ProviderBuilder {
     // Note: this is a result, so we can easily chain builder calls
     url: Result<Url>,
-    chain: Chain,
+    chain: NamedChain,
     max_retry: u32,
     timeout_retry: u32,
     initial_backoff: u64,
@@ -100,12 +101,12 @@ impl ProviderBuilder {
 
         Self {
             url,
-            chain: Chain::Mainnet,
+            chain: NamedChain::Mainnet,
             max_retry: 8,
             timeout_retry: 8,
             initial_backoff: 800,
             timeout: REQUEST_TIMEOUT,
-            // alchemy max cpus <https://github.com/alchemyplatform/alchemy-docs/blob/master/documentation/compute-units.md#rate-limits-cups>
+            // alchemy max cpus <https://docs.alchemy.com/reference/compute-units#what-are-cups-compute-units-per-second>
             compute_units_per_second: ALCHEMY_FREE_TIER_CUPS,
             jwt: None,
             headers: vec![],
@@ -124,10 +125,8 @@ impl ProviderBuilder {
     }
 
     /// Sets the chain of the node the provider will connect to
-    pub fn chain(mut self, chain: impl Into<foundry_config::Chain>) -> Self {
-        if let foundry_config::Chain::Named(chain) = chain.into() {
-            self.chain = chain;
-        }
+    pub fn chain(mut self, chain: NamedChain) -> Self {
+        self.chain = chain;
         self
     }
 
@@ -164,7 +163,7 @@ impl ProviderBuilder {
 
     /// Sets the number of assumed available compute units per second
     ///
-    /// See also, <https://github.com/alchemyplatform/alchemy-docs/blob/master/documentation/compute-units.md#rate-limits-cups>
+    /// See also, <https://docs.alchemy.com/reference/compute-units#what-are-cups-compute-units-per-second>
     pub fn compute_units_per_second(mut self, compute_units_per_second: u64) -> Self {
         self.compute_units_per_second = compute_units_per_second;
         self
@@ -172,7 +171,7 @@ impl ProviderBuilder {
 
     /// Sets the number of assumed available compute units per second
     ///
-    /// See also, <https://github.com/alchemyplatform/alchemy-docs/blob/master/documentation/compute-units.md#rate-limits-cups>
+    /// See also, <https://docs.alchemy.com/reference/compute-units#what-are-cups-compute-units-per-second>
     pub fn compute_units_per_second_opt(mut self, compute_units_per_second: Option<u64>) -> Self {
         if let Some(cups) = compute_units_per_second {
             self.compute_units_per_second = cups;
@@ -205,7 +204,7 @@ impl ProviderBuilder {
     pub async fn connect(self) -> Result<RetryProvider> {
         let mut provider = self.build()?;
         if let Some(blocktime) = provider.get_chainid().await.ok().and_then(|id| {
-            Chain::try_from(id).ok().and_then(|chain| chain.average_blocktime_hint())
+            NamedChain::try_from(id.as_u64()).ok().and_then(|chain| chain.average_blocktime_hint())
         }) {
             provider = provider.interval(blocktime / 2);
         }
@@ -271,10 +270,16 @@ where
         provider.get_chainid().await.wrap_err("Failed to get chain id")?.as_u64()
     };
 
-    if let Ok(chain) = Chain::try_from(chain) {
+    if let Ok(chain) = NamedChain::try_from(chain) {
         // handle chains that deviate from `eth_feeHistory` and have their own oracle
         match chain {
-            Chain::Polygon | Chain::PolygonMumbai => {
+            NamedChain::Polygon | NamedChain::PolygonMumbai => {
+                // TODO: phase this out somehow
+                let chain = match chain {
+                    NamedChain::Polygon => ethers_core::types::Chain::Polygon,
+                    NamedChain::PolygonMumbai => ethers_core::types::Chain::PolygonMumbai,
+                    _ => unreachable!(),
+                };
                 let estimator = Polygon::new(chain)?.category(GasCategory::Standard);
                 return Ok(estimator.estimate_eip1559_fees().await?)
             }

@@ -223,7 +223,7 @@ impl SessionSource {
         // the file compiled correctly, thus the last stack item must be the memory offset of
         // the `bytes memory inspectoor` value
         let mut offset = stack.data().last().unwrap().to_ethers().as_usize();
-        let mem = memory.data();
+        let mem = memory.context_memory();
         let mem_offset = &mem[offset..offset + 32];
         let len = U256::try_from_be_slice(mem_offset).unwrap().to::<usize>();
         offset += 32;
@@ -604,10 +604,9 @@ impl Type {
             // address
             pt::Expression::AddressLiteral(_, _) => Some(Self::Builtin(DynSolType::Address)),
             pt::Expression::HexNumberLiteral(_, s, _) => {
-                match s.parse() {
+                match s.parse::<Address>() {
                     Ok(addr) => {
-                        let checksummed = ethers::utils::to_checksum(&addr, None);
-                        if *s == checksummed {
+                        if *s == addr.to_checksum(None) {
                             Some(Self::Builtin(DynSolType::Address))
                         } else {
                             Some(Self::Builtin(DynSolType::Uint(256)))

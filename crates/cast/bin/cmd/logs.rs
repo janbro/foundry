@@ -1,13 +1,15 @@
 use cast::Cast;
 use clap::Parser;
-use ethers::{providers::Middleware, types::NameOrAddress};
 use ethers_core::{
     abi::{
         token::{LenientTokenizer, StrictTokenizer, Tokenizer},
         Address, Event, HumanReadableParser, ParamType, RawTopicFilter, Token, Topic, TopicFilter,
     },
-    types::{BlockId, BlockNumber, Filter, FilterBlockOption, ValueOrArray, H256, U256},
+    types::{
+        BlockId, BlockNumber, Filter, FilterBlockOption, NameOrAddress, ValueOrArray, H256, U256,
+    },
 };
+use ethers_providers::Middleware;
 use eyre::{Result, WrapErr};
 use foundry_cli::{opts::EthereumOpts, utils};
 use foundry_config::Config;
@@ -167,8 +169,7 @@ fn build_filter_event_sig(event: Event, args: Vec<String>) -> Result<TopicFilter
         .partition(|(_, (_, arg))| !arg.is_empty());
 
     // Only parse the inputs with arguments
-    let indexed_tokens =
-        parse_params(with_args.clone().into_iter().map(|(_, p)| p).collect::<Vec<_>>(), true)?;
+    let indexed_tokens = parse_params(with_args.iter().map(|(_, p)| *p), true)?;
 
     // Merge the inputs restoring the original ordering
     let mut tokens = with_args
@@ -215,7 +216,7 @@ fn parse_params<'a, I: IntoIterator<Item = (&'a ParamType, &'a str)>>(
 ) -> eyre::Result<Vec<Token>> {
     let mut tokens = Vec::new();
 
-    for (param, value) in params.into_iter() {
+    for (param, value) in params {
         let mut token = if lenient {
             LenientTokenizer::tokenize(param, value)
         } else {
@@ -284,8 +285,7 @@ pub fn sanitize_token(token: Token) -> Token {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers::types::H160;
-    use ethers_core::types::H256;
+    use ethers_core::types::{H160, H256};
     use std::str::FromStr;
 
     const ADDRESS: &str = "0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38";

@@ -106,11 +106,8 @@ impl SelectorsSubcommands {
 
                 let mut artifacts = artifacts.into_iter().peekable();
                 while let Some((contract, artifact)) = artifacts.next() {
-                    let abi = artifact.abi.ok_or(eyre::eyre!("Unable to fetch abi"))?;
-                    if abi.abi.functions.is_empty() &&
-                        abi.abi.events.is_empty() &&
-                        abi.abi.errors.is_empty()
-                    {
+                    let abi = artifact.abi.ok_or_else(|| eyre::eyre!("Unable to fetch abi"))?.abi;
+                    if abi.functions.is_empty() && abi.events.is_empty() && abi.errors.is_empty() {
                         continue
                     }
 
@@ -175,14 +172,14 @@ impl SelectorsSubcommands {
                     println!("No colliding method selectors between the two contracts.");
                 } else {
                     let mut table = Table::new();
-                    table.set_header(vec![
+                    table.set_header([
                         String::from("Selector"),
                         first_contract.name,
                         second_contract.name,
                     ]);
-                    colliding_methods.iter().for_each(|t| {
-                        table.add_row(vec![t.0, t.1, t.2]);
-                    });
+                    for method in colliding_methods.iter() {
+                        table.add_row([method.0, method.1, method.2]);
+                    }
                     println!("{} collisions found:", colliding_methods.len());
                     println!("{table}");
                 }
@@ -237,11 +234,8 @@ impl SelectorsSubcommands {
                 let mut artifacts = artifacts.into_iter().peekable();
 
                 while let Some((contract, artifact)) = artifacts.next() {
-                    let abi = artifact.abi.ok_or(eyre::eyre!("Unable to fetch abi"))?;
-                    if abi.abi.functions.is_empty() &&
-                        abi.abi.events.is_empty() &&
-                        abi.abi.errors.is_empty()
-                    {
+                    let abi = artifact.abi.ok_or_else(|| eyre::eyre!("Unable to fetch abi"))?.abi;
+                    if abi.functions.is_empty() && abi.events.is_empty() && abi.errors.is_empty() {
                         continue
                     }
 
@@ -249,24 +243,24 @@ impl SelectorsSubcommands {
 
                     let mut table = Table::new();
 
-                    table.set_header(vec!["Type", "Signature", "Selector"]);
+                    table.set_header(["Type", "Signature", "Selector"]);
 
-                    for func in abi.abi.functions() {
+                    for func in abi.functions() {
                         let sig = func.signature();
                         let selector = func.selector();
-                        table.add_row(vec!["Function", &sig, &hex::encode_prefixed(selector)]);
+                        table.add_row(["Function", &sig, &hex::encode_prefixed(selector)]);
                     }
 
-                    for event in abi.abi.events() {
+                    for event in abi.events() {
                         let sig = event.signature();
                         let selector = event.selector();
-                        table.add_row(vec!["Event", &sig, &hex::encode_prefixed(selector)]);
+                        table.add_row(["Event", &sig, &hex::encode_prefixed(selector)]);
                     }
 
-                    for error in abi.abi.errors() {
+                    for error in abi.errors() {
                         let sig = error.signature();
                         let selector = error.selector();
-                        table.add_row(vec!["Error", &sig, &hex::encode_prefixed(selector)]);
+                        table.add_row(["Error", &sig, &hex::encode_prefixed(selector)]);
                     }
 
                     println!("{table}");

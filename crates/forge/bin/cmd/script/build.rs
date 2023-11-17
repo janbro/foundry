@@ -16,7 +16,6 @@ use foundry_compilers::{
 };
 use foundry_utils::{PostLinkInput, ResolvedDependency};
 use std::{collections::BTreeMap, str::FromStr};
-use tracing::{trace, warn};
 
 impl ScriptArgs {
     /// Compiles the file or project and the verify metadata.
@@ -41,7 +40,7 @@ impl ScriptArgs {
                 if let Some(source) = artifact.source_file() {
                     let abs_path = source
                         .ast
-                        .ok_or(eyre::eyre!("Source from artifact has no AST."))?
+                        .ok_or_else(|| eyre::eyre!("Source from artifact has no AST."))?
                         .absolute_path;
                     let source_code = fs::read_to_string(abs_path).wrap_err_with(|| {
                         format!("Failed to read artifact source file for `{}`", id.identifier())

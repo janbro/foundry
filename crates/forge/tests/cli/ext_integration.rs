@@ -11,6 +11,17 @@ forgetest_external!(
 forgetest_external!(stringutils, "Arachnid/solidity-stringutils");
 forgetest_external!(lootloose, "gakonst/lootloose");
 forgetest_external!(lil_web3, "m1guelpf/lil-web3");
+forgetest_external!(
+    // https://github.com/foundry-rs/foundry/pull/6280
+    // `run: pnpm --version` is ok, `Command::new("pnpm")` isn't. Good job Windows.
+    #[cfg_attr(windows, ignore = "Windows cannot find installed programs")]
+    snekmate,
+    "pcaversaccio/snekmate",
+    // 64MiB memory limit:
+    // - https://github.com/foundry-rs/foundry/pull/6281
+    // - https://github.com/bluealloy/revm/issues/865
+    &["--memory-limit", &(1u64 << 26).to_string()]
+);
 
 // Forking tests
 

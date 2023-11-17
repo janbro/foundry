@@ -1,14 +1,13 @@
 use alloy_primitives::Address;
 use clap::Parser;
-use ethers::{
-    core::rand::thread_rng,
-    signers::{
-        coins_bip39::{English, Mnemonic},
-        LocalWallet, MnemonicBuilder, Signer,
-    },
+use ethers_core::{
+    rand::thread_rng,
     types::{transaction::eip712::TypedData, Signature},
 };
-use ethers_core::utils::to_checksum;
+use ethers_signers::{
+    coins_bip39::{English, Mnemonic},
+    LocalWallet, MnemonicBuilder, Signer,
+};
 use eyre::{Context, Result};
 use foundry_cli::opts::{RawWallet, Wallet};
 use foundry_common::fs;
@@ -226,7 +225,7 @@ impl WalletSubcommands {
                 println!("\nAccounts:");
                 for (i, wallet) in wallets.iter().enumerate() {
                     println!("- Account {i}:");
-                    println!("Address:     {}", to_checksum(&wallet.address(), None));
+                    println!("Address:     {}", wallet.address().to_alloy());
                     println!("Private key: 0x{}\n", hex::encode(wallet.signer().to_bytes()));
                 }
             }
